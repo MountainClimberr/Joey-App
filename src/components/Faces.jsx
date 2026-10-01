@@ -1,21 +1,21 @@
-const stroke = { fill: 'none', stroke: '#000', strokeWidth: 3, strokeLinecap: 'round' }
+export function Face({ mood, size = 96, color = '#000' }) {
+  const stroke = { fill: 'none', stroke: color, strokeWidth: 3, strokeLinecap: 'round' }
 
-export function Face({ mood, size = 96 }) {
   return (
-    <svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-label={mood}>
+    <svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-label={mood === 'none' ? 'not checked in' : mood}>
       <circle cx="50" cy="50" r="44" {...stroke} />
       {mood === 'uncomfortable' && (
         <>
           <path d="M28 36 L42 41 M72 36 L58 41" {...stroke} />
-          <circle cx="36" cy="46" r="3" fill="#000" />
-          <circle cx="64" cy="46" r="3" fill="#000" />
+          <circle cx="36" cy="46" r="3" fill={color} />
+          <circle cx="64" cy="46" r="3" fill={color} />
           <path d="M34 72 Q50 58 66 72" {...stroke} />
         </>
       )}
       {mood === 'neutral' && (
         <>
-          <circle cx="36" cy="42" r="3" fill="#000" />
-          <circle cx="64" cy="42" r="3" fill="#000" />
+          <circle cx="36" cy="42" r="3" fill={color} />
+          <circle cx="64" cy="42" r="3" fill={color} />
           <path d="M36 68 H64" {...stroke} />
         </>
       )}

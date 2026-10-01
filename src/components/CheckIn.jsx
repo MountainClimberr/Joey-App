@@ -1,22 +1,14 @@
 import { useEffect, useState } from 'react'
 import { getTodayCheckIn, submitCheckIn } from '../api.js'
+import { useAuth } from '../auth/context.js'
 import { Face } from './Faces.jsx'
 import FollowUp from './Followup.jsx'
 
 const MOODS = ['uncomfortable', 'neutral', 'comfortable']
 
-// No login yet: each browser gets a random id. Swap for Teams SSO later.
-function getEmployeeId() {
-  let id = localStorage.getItem('joey-employee-id')
-  if (!id) {
-    id = crypto.randomUUID()
-    localStorage.setItem('joey-employee-id', id)
-  }
-  return id
-}
-
 export default function CheckIn() {
-  const [employeeId] = useState(getEmployeeId)
+  const { user } = useAuth()
+  const employeeId = user.id // comes from /api/me (Teams SSO later)
   const [selected, setSelected] = useState(null)
   const [showFollowUp, setShowFollowUp] = useState(false)
   const [status, setStatus] = useState('loading') // loading | ready | saving | error
@@ -44,7 +36,7 @@ export default function CheckIn() {
 
   return (
     <section className="card checkin">
-      <h1>How do you feel today?</h1>
+      <h1>How do you feel today, {user.name}?</h1>
       <div className="faces">
         {MOODS.map((mood) => (
           <button

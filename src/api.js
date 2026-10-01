@@ -50,3 +50,44 @@ export function submitFollowUp(employeeId, kind, data = {}) {
   if (USE_MOCK) return Promise.resolve({ ok: true })
   return http('/followups', { method: 'POST', body: JSON.stringify({ employeeId, kind, ...data }) })
 }
+
+export function getMe() {
+  if (USE_MOCK) {
+    const role = localStorage.getItem('joey-mock-role') || 'employee'
+    return Promise.resolve({
+      id: role === 'hr' ? 'mock-hr' : 'mock-employee',
+      name: role === 'hr' ? 'Dana (HR)' : 'Sandra',
+      role,
+    })
+  }
+  return http('/me')
+}
+
+// ---- HR roster ----
+const MOCK_ROSTER = [
+  { id: 'mock-e0', name: 'Carol', mood: 'uncomfortable' },
+  { id: 'mock-e1', name: 'Sandra', mood: 'comfortable' },
+  { id: 'mock-e2', name: 'Robert', mood: null },
+  { id: 'mock-e3', name: 'Priya', mood: 'neutral' },
+  { id: 'mock-e4', name: 'Marcus', mood: 'comfortable' },
+  { id: 'mock-e5', name: 'Lena', mood: null },
+]
+
+export function getRoster() {
+  if (USE_MOCK) return Promise.resolve(MOCK_ROSTER)
+  return http('/roster')
+}
+
+export function getEmployeeWeek(employeeId) {
+  if (USE_MOCK) {
+    const today = (new Date().getDay() + 6) % 7 // Mon = 0
+    const person = MOCK_ROSTER.find((p) => p.id === employeeId)
+    const earlier = ['neutral', 'uncomfortable', 'uncomfortable', 'neutral', 'comfortable']
+    const week = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label, i) => ({
+      label,
+      mood: i < today ? earlier[i] : i === today ? (person?.mood ?? null) : null,
+    }))
+    return Promise.resolve(week)
+  }
+  return http(`/roster/${encodeURIComponent(employeeId)}/week`)
+}

@@ -1,14 +1,19 @@
 import { useEffect, useState } from 'react'
 import { getTodayCheckIn, submitCheckIn } from '../api.js'
 import { useAuth } from '../auth/context.js'
+import { MOODS, MOOD_COLORS } from '../moods.js'
 import { Face } from './Faces.jsx'
 import FollowUp from './Followup.jsx'
 
-const MOODS = ['uncomfortable', 'neutral', 'comfortable']
+function greeting() {
+  const h = new Date().getHours()
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
+}
 
 export default function CheckIn() {
   const { user } = useAuth()
   const employeeId = user.id // comes from /api/me (Teams SSO later)
+  const [hello] = useState(greeting)
   const [selected, setSelected] = useState(null)
   const [showFollowUp, setShowFollowUp] = useState(false)
   const [status, setStatus] = useState('loading') // loading | ready | saving | error
@@ -36,17 +41,21 @@ export default function CheckIn() {
 
   return (
     <section className="card checkin">
-      <h1>How do you feel today, {user.name}?</h1>
-      <div className="faces">
+      <p className="kicker">{hello}, {user.name.split(' ')[0]}</p>
+      <h1>How are you feeling today?</h1>
+      <p className="sub">One tap is all it takes.</p>
+
+      <div className={`faces ${selected ? 'has-selection' : ''}`}>
         {MOODS.map((mood) => (
           <button
             key={mood}
-            className={`face-btn ${selected === mood ? 'is-selected' : ''}`}
+            className={`mood-card ${selected === mood ? 'is-selected' : ''}`}
+            style={{ '--mood': MOOD_COLORS[mood] }}
             onClick={() => choose(mood)}
             disabled={status === 'loading' || status === 'saving'}
             aria-pressed={selected === mood}
           >
-            <Face mood={mood} />
+            <div className="mood-face"><Face mood={mood} size="100%" /></div>
             <span>{mood}</span>
           </button>
         ))}

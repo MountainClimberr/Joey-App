@@ -1,12 +1,9 @@
 import { useEffect, useState } from 'react'
 import { getInsights } from '../api.js'
 import { Face } from './Faces.jsx'
+import { MOOD_COLORS } from '../moods.js'
 
-const ROWS = [
-  { mood: 'comfortable', color: 'var(--teal)' },
-  { mood: 'neutral', color: 'var(--teal-mid)' },
-  { mood: 'uncomfortable', color: 'var(--teal-soft)' },
-]
+const ROWS = ['comfortable', 'neutral', 'uncomfortable'].map((mood) => ({ mood, color: MOOD_COLORS[mood] }))
 
 export default function Insights() {
   const [data, setData] = useState(null)

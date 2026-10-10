@@ -72,18 +72,12 @@ export default function FollowUp({ employeeId, mood }) {
               <strong>Talk now</strong>
               <span>Choose a bot or a human</span>
             </button>
-            <button onClick={() => send('talk-choice', { choice: 'later' }, 'No pressure. We’re here whenever you want.')}>
-              <strong>Maybe later</strong>
-              <span>We’re here whenever you want</span>
-            </button>
+            
             <button onClick={() => send('talk-choice', { choice: 'log' }, 'Recorded. No conversation needed.')}>
               <strong>Just log it</strong>
               <span>Recorded, no conversation</span>
             </button>
-            <button onClick={() => send('talk-choice', { choice: 'read' }, 'A self-serve resource will appear here once HR provides the content.')}>
-              <strong>Read something</strong>
-              <span>A resource to try on your own</span>
-            </button>
+            
           </div>
           <p className="note private">Private by default. Nothing here goes to your manager or your review.</p>
         </>

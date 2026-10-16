@@ -2,6 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import pg from 'pg'
 import process from 'node:process'
+import { calculateUncomfortableStreak } from './streak.js'
 
 const app = express()
 const port = Number(process.env.PORT) || 3001
@@ -25,6 +26,25 @@ function formatCheckIn(row) {
   }
 }
 
+async function getUncomfortableStreak(queryable, employeeId) {
+  const { rows } = await queryable.query(
+    `SELECT id, mood, checked_in_on
+     FROM check_ins
+     WHERE employee_id = $1
+     ORDER BY checked_in_on DESC, created_at DESC`,
+    [employeeId],
+  )
+  return calculateUncomfortableStreak(rows)
+}
+
+function formatStreak(streak) {
+  return {
+    count: streak.count,
+    threshold: streak.threshold,
+    flagged: streak.flagged,
+  }
+}
+
 app.post('/api/checkins', async (request, response) => {
   const { employeeId, mood } = request.body ?? {}
   if (!isValidEmployeeId(employeeId) || !validMoods.has(mood)) {
@@ -32,8 +52,22 @@ app.post('/api/checkins', async (request, response) => {
     return
   }
 
+  let client
   try {
-    const { rows } = await pool.query(
+    client = await pool.connect()
+    await client.query('BEGIN')
+
+    const { rows: employees } = await client.query(
+      'SELECT id FROM employees WHERE id = $1 FOR UPDATE',
+      [employeeId],
+    )
+    if (!employees.length) {
+      await client.query('ROLLBACK')
+      response.status(404).json({ error: 'Employee not found' })
+      return
+    }
+
+    const { rows } = await client.query(
       `INSERT INTO check_ins (employee_id, mood)
        VALUES ($1, $2)
        ON CONFLICT (employee_id, checked_in_on)
@@ -41,13 +75,54 @@ app.post('/api/checkins', async (request, response) => {
        RETURNING id, employee_id, mood, checked_in_on, created_at`,
       [employeeId, mood],
     )
-    response.status(201).json(formatCheckIn(rows[0]))
+
+    const streak = await getUncomfortableStreak(client, employeeId)
+    if (streak.flagged) {
+      const details = {
+        threshold: streak.threshold,
+        countAtDetection: streak.count,
+        thresholdCheckInId: streak.thresholdCheckIn.id,
+        thresholdReachedOn: streak.thresholdCheckIn.checked_in_on,
+      }
+      await client.query(
+        `INSERT INTO alerts (employee_id, alert_type, severity, details)
+         SELECT $1, 'uncomfortable_streak', 'high', $2::jsonb
+         WHERE NOT EXISTS (
+           SELECT 1 FROM alerts
+           WHERE employee_id = $1
+             AND alert_type = 'uncomfortable_streak'
+             AND details->>'thresholdCheckInId' = $3
+         )`,
+        [employeeId, JSON.stringify(details), streak.thresholdCheckIn.id],
+      )
+    }
+
+    await client.query('COMMIT')
+    response.status(201).json({ ...formatCheckIn(rows[0]), streak: formatStreak(streak) })
   } catch (error) {
+    if (client) await client.query('ROLLBACK').catch(() => {})
     if (error.code === '23503') {
       response.status(404).json({ error: 'Employee not found' })
       return
     }
     response.status(500).json({ error: 'Could not save check-in' })
+  } finally {
+    client?.release()
+  }
+})
+
+app.get('/api/checkins/streak', async (request, response) => {
+  const { employeeId } = request.query
+  if (!isValidEmployeeId(employeeId)) {
+    response.status(400).json({ error: 'A valid employeeId is required' })
+    return
+  }
+
+  try {
+    const streak = await getUncomfortableStreak(pool, employeeId)
+    response.json({ streak: formatStreak(streak) })
+  } catch {
+    response.status(500).json({ error: 'Could not retrieve check-in streak' })
   }
 })
 

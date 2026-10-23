@@ -63,14 +63,50 @@ export function getMe() {
   return http('/me')
 }
 
+// ---- away mode (vacation / sick) ----
+const localDay = (offset = 0) => {
+  const d = new Date()
+  d.setDate(d.getDate() + offset)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const awayIsActive = (a) =>
+  a && !a.endedAt && a.startsOn <= localDay() && (!a.endsOn || a.endsOn >= localDay())
+
+export function getAway(employeeId) {
+  if (USE_MOCK) {
+    const a = JSON.parse(localStorage.getItem('joey-mock-away') || 'null')
+    return Promise.resolve({ away: awayIsActive(a) ? a : null })
+  }
+  return http(`/away/current?employeeId=${encodeURIComponent(employeeId)}`)
+}
+
+// kind: 'vacation' | 'sick'. startsOn defaults to today; endsOn is optional (open-ended).
+export function setAway(employeeId, kind, { startsOn, endsOn } = {}) {
+  if (USE_MOCK) {
+    const a = { id: 'mock-away', kind, startsOn: startsOn || localDay(), endsOn: endsOn || null }
+    localStorage.setItem('joey-mock-away', JSON.stringify(a))
+    return Promise.resolve({ away: a })
+  }
+  return http('/away', { method: 'POST', body: JSON.stringify({ employeeId, kind, startsOn, endsOn }) })
+}
+
+export function endAway(employeeId) {
+  if (USE_MOCK) {
+    localStorage.removeItem('joey-mock-away')
+    return Promise.resolve({ ended: 1 })
+  }
+  return http('/away/end', { method: 'POST', body: JSON.stringify({ employeeId }) })
+}
+
 // ---- HR roster ----
 const MOCK_ROSTER = [
   { id: 'mock-e0', name: 'Carol', mood: 'uncomfortable' },
   { id: 'mock-e1', name: 'Sandra', mood: 'comfortable' },
-  { id: 'mock-e2', name: 'Robert', mood: null },
+  { id: 'mock-e2', name: 'Robert', mood: null, away: { kind: 'vacation', endsOn: localDay(4) } },
   { id: 'mock-e3', name: 'Priya', mood: 'neutral' },
   { id: 'mock-e4', name: 'Marcus', mood: 'comfortable' },
-  { id: 'mock-e5', name: 'Lena', mood: null },
+  { id: 'mock-e5', name: 'Lena', mood: null, away: { kind: 'sick', endsOn: null } },
+  { id: 'mock-e6', name: 'Tom', mood: null },
 ]
 
 export function getRoster() {
@@ -83,10 +119,15 @@ export function getEmployeeWeek(employeeId) {
     const today = (new Date().getDay() + 6) % 7 // Mon = 0
     const person = MOCK_ROSTER.find((p) => p.id === employeeId)
     const earlier = ['neutral', 'uncomfortable', 'uncomfortable', 'neutral', 'comfortable']
-    const week = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label, i) => ({
-      label,
-      mood: i < today ? earlier[i] : i === today ? (person?.mood ?? null) : null,
-    }))
+    const week = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label, i) => {
+      const away = Boolean(person?.away) && i >= today - 1
+      return {
+        label,
+        away,
+        awayKind: away ? person.away.kind : null,
+        mood: away ? null : i < today ? earlier[i] : i === today ? (person?.mood ?? null) : null,
+      }
+    })
     return Promise.resolve(week)
   }
   return http(`/roster/${encodeURIComponent(employeeId)}/week`)

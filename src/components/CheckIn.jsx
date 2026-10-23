@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { getTodayCheckIn, submitCheckIn } from '../api.js'
+import { getTodayCheckIn, submitCheckIn, getAway } from '../api.js'
 import { useAuth } from '../auth/context.js'
 import { MOODS, MOOD_COLORS } from '../moods.js'
 import { Face } from './Faces.jsx'
 import FollowUp from './Followup.jsx'
+import { AwayForm, AwayNotice } from './Away.jsx'
 
 function greeting() {
   const h = new Date().getHours()
@@ -17,11 +18,14 @@ export default function CheckIn() {
   const [selected, setSelected] = useState(null)
   const [showFollowUp, setShowFollowUp] = useState(false)
   const [status, setStatus] = useState('loading') // loading | ready | saving | error
+  const [away, setAway] = useState(null) // active vacation / sick period, if any
+  const [showAwayForm, setShowAwayForm] = useState(false)
 
   useEffect(() => {
-    getTodayCheckIn(employeeId)
-      .then(({ checkIn }) => {
+    Promise.all([getTodayCheckIn(employeeId), getAway(employeeId)])
+      .then(([{ checkIn }, { away: activeAway }]) => {
         setSelected(checkIn?.mood ?? null) // already checked in today: don't re-prompt
+        setAway(activeAway)
         setStatus('ready')
       })
       .catch(() => setStatus('error'))
@@ -37,6 +41,10 @@ export default function CheckIn() {
     } catch {
       setStatus('error')
     }
+  }
+
+  if (away) {
+    return <AwayNotice employeeId={employeeId} away={away} onBack={() => { setAway(null); setShowAwayForm(false) }} />
   }
 
   return (
@@ -66,6 +74,14 @@ export default function CheckIn() {
         <p className="note">You selected {selected}. Now on with your day.</p>
       )}
       {showFollowUp && <FollowUp key={selected} employeeId={employeeId} mood={selected} />}
+
+      {!selected && status !== 'loading' && (
+        showAwayForm ? (
+          <AwayForm employeeId={employeeId} onSaved={setAway} onCancel={() => setShowAwayForm(false)} />
+        ) : (
+          <button className="away-link" onClick={() => setShowAwayForm(true)}>Out sick or on vacation?</button>
+        )
+      )}
     </section>
   )
 }

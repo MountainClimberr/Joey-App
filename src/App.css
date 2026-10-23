@@ -122,7 +122,7 @@ h2 { margin: 28px 0 8px; font-size: 1.15rem; }
 /* ---------- HR roster ---------- */
 .back { border: none; background: none; color: var(--teal); padding: 0; margin-bottom: 14px; font-weight: 600; }
 
-.stats { display: grid; grid-template-columns: 2fr repeat(3, 1fr); gap: 14px; margin: 24px 0; }
+.stats { display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 14px; margin: 24px 0; }
 .stat-main, .stat { border-radius: 20px; padding: 18px 20px; }
 .stat-main { background: var(--panel); }
 .stat-main strong { font-size: 2.3rem; line-height: 1; }
@@ -134,7 +134,7 @@ h2 { margin: 28px 0 8px; font-size: 1.15rem; }
 .stat strong { font-size: 1.7rem; line-height: 1.1; margin-top: 6px; }
 .stat span { color: var(--muted); font-size: 0.85rem; text-transform: capitalize; }
 @media (max-width: 720px) {
-  .stats { grid-template-columns: repeat(3, 1fr); }
+  .stats { grid-template-columns: repeat(2, 1fr); }
   .stat-main { grid-column: 1 / -1; }
 }
 
@@ -159,3 +159,24 @@ h2 { margin: 28px 0 8px; font-size: 1.15rem; }
 .week-day small { font-weight: 500; color: var(--muted); text-transform: capitalize; }
 .week-day.pending { background: #f1f5f6; border-style: dashed; color: var(--muted); }
 @media (max-width: 560px) { .week { grid-template-columns: repeat(3, 1fr); } }
+
+/* ---------- away mode (vacation / sick) ---------- */
+.away-link { margin-top: 28px; background: none; border: none; padding: 4px; color: var(--muted); font: inherit; font-size: 0.92rem; text-decoration: underline; cursor: pointer; }
+.away-link:hover { color: var(--teal); }
+.away-form { max-width: 520px; margin: 28px auto 0; padding-top: 8px; border-top: 1px solid var(--line); text-align: left; }
+.away-form h2, .away-form > .note { text-align: center; }
+.away-kinds { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 16px 0; }
+.away-kinds button { padding: 14px; border: 2px solid var(--line); border-radius: 16px; background: #fff; color: var(--ink); font-weight: 600; cursor: pointer; }
+.away-kinds button.is-selected { border-color: var(--teal); background: var(--panel); }
+.away-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.away-dates label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; color: var(--muted); }
+.away-dates input { font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: #fff; }
+.away-hint { font-size: 0.85rem; }
+.away-notice .sub { margin-bottom: 20px; }
+.actions button:disabled { opacity: 0.5; cursor: default; }
+.stat.away-stat { background: var(--panel); }
+.person.away { background: #f3f8f9; border-color: var(--line); color: var(--ink); }
+.person.away .pill { background: var(--panel); }
+.away-until { color: var(--muted); font-size: 0.78rem; }
+.week-day.away { background: #f3f8f9; border-color: var(--line); }
+@media (max-width: 480px) { .away-dates { grid-template-columns: 1fr; } }

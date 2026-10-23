@@ -1,0 +1,562 @@
+diff --git a/server/index.js b/server/index.js
+index 049d200..46015e9 100644
+--- a/server/index.js
++++ b/server/index.js
+@@ -12,6 +12,25 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}
+ 
+ app.use(express.json())
+ 
++const validAwayKinds = new Set(['vacation', 'sick'])
++
++function isValidDay(value) {
++  return typeof value === 'string'
++    && /^\d{4}-\d{2}-\d{2}$/.test(value)
++    && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value
++}
++
++// An away period counts today if it has started, hasn't passed its end date, and
++// the person hasn't tapped "I'm back". HR's roster/week queries should reuse this.
++const ACTIVE_AWAY_SQL = `starts_on <= CURRENT_DATE
++  AND (ends_on IS NULL OR ends_on >= CURRENT_DATE)
++  AND ended_at IS NULL`
++
++function formatAway(row) {
++  return { id: row.id, kind: row.kind, startsOn: row.starts_on, endsOn: row.ends_on }
++}
++
++
+ function isValidEmployeeId(employeeId) {
+   return typeof employeeId === 'string' && uuidPattern.test(employeeId)
+ }
+@@ -167,6 +186,79 @@ app.get('/api/checkins', async (request, response) => {
+   }
+ })
+ 
++app.post('/api/away', async (request, response) => {
++  const { employeeId, kind, startsOn, endsOn } = request.body ?? {}
++  if (!isValidEmployeeId(employeeId) || !validAwayKinds.has(kind)) {
++    response.status(400).json({ error: 'A valid employeeId and kind (vacation or sick) are required' })
++    return
++  }
++  if ((startsOn != null && !isValidDay(startsOn)) || (endsOn != null && !isValidDay(endsOn))) {
++    response.status(400).json({ error: 'Dates must look like YYYY-MM-DD' })
++    return
++  }
++
++  try {
++    const { rows } = await pool.query(
++      `INSERT INTO away_periods (employee_id, kind, starts_on, ends_on)
++       VALUES ($1, $2, COALESCE($3::date, CURRENT_DATE), $4::date)
++       RETURNING id, kind, starts_on::text, ends_on::text`,
++      [employeeId, kind, startsOn ?? null, endsOn ?? null],
++    )
++    response.status(201).json({ away: formatAway(rows[0]) })
++  } catch (error) {
++    if (error.code === '23503') {
++      response.status(404).json({ error: 'Employee not found' })
++      return
++    }
++    if (error.code === '23514') {
++      response.status(400).json({ error: 'The end date can\'t be before the start date' })
++      return
++    }
++    response.status(500).json({ error: 'Could not save away status' })
++  }
++})
++
++app.post('/api/away/end', async (request, response) => {
++  const { employeeId } = request.body ?? {}
++  if (!isValidEmployeeId(employeeId)) {
++    response.status(400).json({ error: 'A valid employeeId is required' })
++    return
++  }
++
++  try {
++    const { rowCount } = await pool.query(
++      `UPDATE away_periods SET ended_at = now()
++       WHERE employee_id = $1 AND ${ACTIVE_AWAY_SQL}`,
++      [employeeId],
++    )
++    response.json({ ended: rowCount })
++  } catch {
++    response.status(500).json({ error: 'Could not end away status' })
++  }
++})
++
++app.get('/api/away/current', async (request, response) => {
++  const { employeeId } = request.query
++  if (!isValidEmployeeId(employeeId)) {
++    response.status(400).json({ error: 'A valid employeeId is required' })
++    return
++  }
++
++  try {
++    const { rows } = await pool.query(
++      `SELECT id, kind, starts_on::text, ends_on::text
++       FROM away_periods
++       WHERE employee_id = $1 AND ${ACTIVE_AWAY_SQL}
++       ORDER BY created_at DESC
++       LIMIT 1`,
++      [employeeId],
++    )
++    response.json({ away: rows[0] ? formatAway(rows[0]) : null })
++  } catch {
++    response.status(500).json({ error: 'Could not retrieve away status' })
++  }
++})
++
+ app.get('/api/health', async (_request, response) => {
+   try {
+     await pool.query('SELECT 1')
+diff --git a/server/migrations/002_away_periods.sql b/server/migrations/002_away_periods.sql
+new file mode 100644
+index 0000000..bab3a65
+--- /dev/null
++++ b/server/migrations/002_away_periods.sql
+@@ -0,0 +1,15 @@
++-- "Away mode": a person on vacation or out sick doesn't check in, and HR can see why
++-- they're missing. Away days live in their own table (not check_ins), so they never
++-- count as mood data in insights or break/extend the uncomfortable-streak logic.
++CREATE TABLE away_periods (
++  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
++  employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
++  kind text NOT NULL CHECK (kind IN ('vacation', 'sick')),
++  starts_on date NOT NULL DEFAULT CURRENT_DATE,
++  ends_on date,          -- NULL = open-ended, until the person says they're back
++  ended_at timestamptz,  -- set when the person taps "I'm back" before ends_on
++  created_at timestamptz NOT NULL DEFAULT now(),
++  CHECK (ends_on IS NULL OR ends_on >= starts_on)
++);
++
++CREATE INDEX away_periods_employee_idx ON away_periods (employee_id, starts_on DESC);
+diff --git a/src/App.css b/src/App.css
+index 536c097..0ec811f 100644
+--- a/src/App.css
++++ b/src/App.css
+@@ -122,7 +122,7 @@ h2 { margin: 28px 0 8px; font-size: 1.15rem; }
+ /* ---------- HR roster ---------- */
+ .back { border: none; background: none; color: var(--teal); padding: 0; margin-bottom: 14px; font-weight: 600; }
+ 
+-.stats { display: grid; grid-template-columns: 2fr repeat(3, 1fr); gap: 14px; margin: 24px 0; }
++.stats { display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: 14px; margin: 24px 0; }
+ .stat-main, .stat { border-radius: 20px; padding: 18px 20px; }
+ .stat-main { background: var(--panel); }
+ .stat-main strong { font-size: 2.3rem; line-height: 1; }
+@@ -134,7 +134,7 @@ h2 { margin: 28px 0 8px; font-size: 1.15rem; }
+ .stat strong { font-size: 1.7rem; line-height: 1.1; margin-top: 6px; }
+ .stat span { color: var(--muted); font-size: 0.85rem; text-transform: capitalize; }
+ @media (max-width: 720px) {
+-  .stats { grid-template-columns: repeat(3, 1fr); }
++  .stats { grid-template-columns: repeat(2, 1fr); }
+   .stat-main { grid-column: 1 / -1; }
+ }
+ 
+@@ -158,4 +158,25 @@ h2 { margin: 28px 0 8px; font-size: 1.15rem; }
+ }
+ .week-day small { font-weight: 500; color: var(--muted); text-transform: capitalize; }
+ .week-day.pending { background: #f1f5f6; border-style: dashed; color: var(--muted); }
+-@media (max-width: 560px) { .week { grid-template-columns: repeat(3, 1fr); } }
+\ No newline at end of file
++@media (max-width: 560px) { .week { grid-template-columns: repeat(3, 1fr); } }
++
++/* ---------- away mode (vacation / sick) ---------- */
++.away-link { margin-top: 28px; background: none; border: none; padding: 4px; color: var(--muted); font: inherit; font-size: 0.92rem; text-decoration: underline; cursor: pointer; }
++.away-link:hover { color: var(--teal); }
++.away-form { max-width: 520px; margin: 28px auto 0; padding-top: 8px; border-top: 1px solid var(--line); text-align: left; }
++.away-form h2, .away-form > .note { text-align: center; }
++.away-kinds { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 16px 0; }
++.away-kinds button { padding: 14px; border: 2px solid var(--line); border-radius: 16px; background: #fff; color: var(--ink); font-weight: 600; cursor: pointer; }
++.away-kinds button.is-selected { border-color: var(--teal); background: var(--panel); }
++.away-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
++.away-dates label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; color: var(--muted); }
++.away-dates input { font: inherit; padding: 10px; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); background: #fff; }
++.away-hint { font-size: 0.85rem; }
++.away-notice .sub { margin-bottom: 20px; }
++.actions button:disabled { opacity: 0.5; cursor: default; }
++.stat.away-stat { background: var(--panel); }
++.person.away { background: #f3f8f9; border-color: var(--line); color: var(--ink); }
++.person.away .pill { background: var(--panel); }
++.away-until { color: var(--muted); font-size: 0.78rem; }
++.week-day.away { background: #f3f8f9; border-color: var(--line); }
++@media (max-width: 480px) { .away-dates { grid-template-columns: 1fr; } }
+diff --git a/src/api.js b/src/api.js
+index 08f496b..cc227cb 100644
+--- a/src/api.js
++++ b/src/api.js
+@@ -63,14 +63,50 @@ export function getMe() {
+   return http('/me')
+ }
+ 
++// ---- away mode (vacation / sick) ----
++const localDay = (offset = 0) => {
++  const d = new Date()
++  d.setDate(d.getDate() + offset)
++  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
++}
++const awayIsActive = (a) =>
++  a && !a.endedAt && a.startsOn <= localDay() && (!a.endsOn || a.endsOn >= localDay())
++
++export function getAway(employeeId) {
++  if (USE_MOCK) {
++    const a = JSON.parse(localStorage.getItem('joey-mock-away') || 'null')
++    return Promise.resolve({ away: awayIsActive(a) ? a : null })
++  }
++  return http(`/away/current?employeeId=${encodeURIComponent(employeeId)}`)
++}
++
++// kind: 'vacation' | 'sick'. startsOn defaults to today; endsOn is optional (open-ended).
++export function setAway(employeeId, kind, { startsOn, endsOn } = {}) {
++  if (USE_MOCK) {
++    const a = { id: 'mock-away', kind, startsOn: startsOn || localDay(), endsOn: endsOn || null }
++    localStorage.setItem('joey-mock-away', JSON.stringify(a))
++    return Promise.resolve({ away: a })
++  }
++  return http('/away', { method: 'POST', body: JSON.stringify({ employeeId, kind, startsOn, endsOn }) })
++}
++
++export function endAway(employeeId) {
++  if (USE_MOCK) {
++    localStorage.removeItem('joey-mock-away')
++    return Promise.resolve({ ended: 1 })
++  }
++  return http('/away/end', { method: 'POST', body: JSON.stringify({ employeeId }) })
++}
++
+ // ---- HR roster ----
+ const MOCK_ROSTER = [
+   { id: 'mock-e0', name: 'Carol', mood: 'uncomfortable' },
+   { id: 'mock-e1', name: 'Sandra', mood: 'comfortable' },
+-  { id: 'mock-e2', name: 'Robert', mood: null },
++  { id: 'mock-e2', name: 'Robert', mood: null, away: { kind: 'vacation', endsOn: localDay(4) } },
+   { id: 'mock-e3', name: 'Priya', mood: 'neutral' },
+   { id: 'mock-e4', name: 'Marcus', mood: 'comfortable' },
+-  { id: 'mock-e5', name: 'Lena', mood: null },
++  { id: 'mock-e5', name: 'Lena', mood: null, away: { kind: 'sick', endsOn: null } },
++  { id: 'mock-e6', name: 'Tom', mood: null },
+ ]
+ 
+ export function getRoster() {
+@@ -83,10 +119,15 @@ export function getEmployeeWeek(employeeId) {
+     const today = (new Date().getDay() + 6) % 7 // Mon = 0
+     const person = MOCK_ROSTER.find((p) => p.id === employeeId)
+     const earlier = ['neutral', 'uncomfortable', 'uncomfortable', 'neutral', 'comfortable']
+-    const week = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label, i) => ({
+-      label,
+-      mood: i < today ? earlier[i] : i === today ? (person?.mood ?? null) : null,
+-    }))
++    const week = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label, i) => {
++      const away = Boolean(person?.away) && i >= today - 1
++      return {
++        label,
++        away,
++        awayKind: away ? person.away.kind : null,
++        mood: away ? null : i < today ? earlier[i] : i === today ? (person?.mood ?? null) : null,
++      }
++    })
+     return Promise.resolve(week)
+   }
+   return http(`/roster/${encodeURIComponent(employeeId)}/week`)
+diff --git a/src/away.js b/src/away.js
+new file mode 100644
+index 0000000..bc5306f
+--- /dev/null
++++ b/src/away.js
+@@ -0,0 +1,4 @@
++export const AWAY_LABELS = { vacation: 'Vacation', sick: 'Out sick' }
++
++export const prettyDay = (day) =>
++  new Date(`${day}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+diff --git a/src/components/Away.jsx b/src/components/Away.jsx
+new file mode 100644
+index 0000000..1c7ee99
+--- /dev/null
++++ b/src/components/Away.jsx
+@@ -0,0 +1,108 @@
++import { useState } from 'react'
++import { setAway, endAway } from '../api.js'
++import { AWAY_LABELS, prettyDay } from '../away.js'
++
++const KINDS = [
++  { key: 'vacation', label: 'On vacation' },
++  { key: 'sick', label: 'Out sick' },
++]
++
++const localToday = () => {
++  const d = new Date()
++  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
++}
++
++// Shown on the check-in screen when someone taps "Out sick or on vacation?"
++export function AwayForm({ employeeId, onSaved, onCancel }) {
++  const [kind, setKind] = useState('vacation')
++  const [startsOn, setStartsOn] = useState(localToday)
++  const [endsOn, setEndsOn] = useState('')
++  const [status, setStatus] = useState('idle') // idle | saving | error
++
++  const badRange = endsOn && endsOn < startsOn
++
++  async function save() {
++    setStatus('saving')
++    try {
++      const { away } = await setAway(employeeId, kind, { startsOn, endsOn: endsOn || undefined })
++      onSaved(away)
++    } catch {
++      setStatus('error')
++    }
++  }
++
++  return (
++    <div className="away-form">
++      <h2>Taking some time away?</h2>
++      <p className="note">No check-ins needed while you're away. Your team will see that you're out.</p>
++
++      <div className="away-kinds">
++        {KINDS.map((k) => (
++          <button
++            key={k.key}
++            className={kind === k.key ? 'is-selected' : ''}
++            aria-pressed={kind === k.key}
++            onClick={() => setKind(k.key)}
++          >
++            {k.label}
++          </button>
++        ))}
++      </div>
++
++      <div className="away-dates">
++        <label>
++          From
++          <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} />
++        </label>
++        <label>
++          Until (optional)
++          <input type="date" value={endsOn} min={startsOn} onChange={(e) => setEndsOn(e.target.value)} />
++        </label>
++      </div>
++      <p className="note away-hint">Not sure when you'll be back? Leave "until" empty and tap "I'm back" when you return.</p>
++
++      {badRange && <p className="note warn">The end date can't be before the start date.</p>}
++      {status === 'error' && <p className="note warn">Couldn't save that. Try again in a moment.</p>}
++
++      <div className="actions">
++        <button onClick={onCancel}>Cancel</button>
++        <button className="primary" onClick={save} disabled={!startsOn || badRange || status === 'saving'}>
++          Set me as away
++        </button>
++      </div>
++    </div>
++  )
++}
++
++// Replaces the mood picker while someone is away.
++export function AwayNotice({ employeeId, away, onBack }) {
++  const [status, setStatus] = useState('idle') // idle | saving | error
++
++  async function back() {
++    setStatus('saving')
++    try {
++      await endAway(employeeId)
++      onBack()
++    } catch {
++      setStatus('error')
++    }
++  }
++
++  const sick = away.kind === 'sick'
++  return (
++    <section className="card checkin away-notice">
++      <p className="kicker">{AWAY_LABELS[away.kind]}</p>
++      <h1>{sick ? 'Take care of yourself.' : 'Enjoy your time off.'}</h1>
++      <p className="sub">
++        No check-in needed. You're set as away
++        {away.endsOn ? ` until ${prettyDay(away.endsOn)}` : ' until you tell me you\'re back'}.
++      </p>
++      {status === 'error' && <p className="note warn">Couldn't update that. Try again in a moment.</p>}
++      <div className="actions">
++        <button className="primary" onClick={back} disabled={status === 'saving'}>
++          I'm back, let's check in
++        </button>
++      </div>
++    </section>
++  )
++}
+diff --git a/src/components/CheckIn.jsx b/src/components/CheckIn.jsx
+index be3de61..b990266 100644
+--- a/src/components/CheckIn.jsx
++++ b/src/components/CheckIn.jsx
+@@ -1,9 +1,10 @@
+ import { useEffect, useState } from 'react'
+-import { getTodayCheckIn, submitCheckIn } from '../api.js'
++import { getTodayCheckIn, submitCheckIn, getAway } from '../api.js'
+ import { useAuth } from '../auth/context.js'
+ import { MOODS, MOOD_COLORS } from '../moods.js'
+ import { Face } from './Faces.jsx'
+ import FollowUp from './Followup.jsx'
++import { AwayForm, AwayNotice } from './Away.jsx'
+ 
+ function greeting() {
+   const h = new Date().getHours()
+@@ -17,11 +18,14 @@ export default function CheckIn() {
+   const [selected, setSelected] = useState(null)
+   const [showFollowUp, setShowFollowUp] = useState(false)
+   const [status, setStatus] = useState('loading') // loading | ready | saving | error
++  const [away, setAway] = useState(null) // active vacation / sick period, if any
++  const [showAwayForm, setShowAwayForm] = useState(false)
+ 
+   useEffect(() => {
+-    getTodayCheckIn(employeeId)
+-      .then(({ checkIn }) => {
++    Promise.all([getTodayCheckIn(employeeId), getAway(employeeId)])
++      .then(([{ checkIn }, { away: activeAway }]) => {
+         setSelected(checkIn?.mood ?? null) // already checked in today: don't re-prompt
++        setAway(activeAway)
+         setStatus('ready')
+       })
+       .catch(() => setStatus('error'))
+@@ -39,6 +43,10 @@ export default function CheckIn() {
+     }
+   }
+ 
++  if (away) {
++    return <AwayNotice employeeId={employeeId} away={away} onBack={() => { setAway(null); setShowAwayForm(false) }} />
++  }
++
+   return (
+     <section className="card checkin">
+       <p className="kicker">{hello}, {user.name.split(' ')[0]}</p>
+@@ -66,6 +74,14 @@ export default function CheckIn() {
+         <p className="note">You selected {selected}. Now on with your day.</p>
+       )}
+       {showFollowUp && <FollowUp key={selected} employeeId={employeeId} mood={selected} />}
++
++      {!selected && status !== 'loading' && (
++        showAwayForm ? (
++          <AwayForm employeeId={employeeId} onSaved={setAway} onCancel={() => setShowAwayForm(false)} />
++        ) : (
++          <button className="away-link" onClick={() => setShowAwayForm(true)}>Out sick or on vacation?</button>
++        )
++      )}
+     </section>
+   )
+ }
+\ No newline at end of file
+diff --git a/src/components/Faces.jsx b/src/components/Faces.jsx
+index e98756e..55d67a5 100644
+--- a/src/components/Faces.jsx
++++ b/src/components/Faces.jsx
+@@ -3,14 +3,21 @@ import { MOOD_COLORS } from '../moods.js'
+ const INK = '#0f3a42'
+ 
+ // mood: 'comfortable' | 'neutral' | 'uncomfortable' | 'none' (not checked in: gray, dashed)
++//       | 'away' (vacation / out sick: calm "paused" mark, no feeling implied)
+ export function Face({ mood, size = 96 }) {
+-  const pending = !MOOD_COLORS[mood]
++  const away = mood === 'away'
++  const pending = !away && !MOOD_COLORS[mood]
+   const line = INK
+   const s = { fill: 'none', stroke: line, strokeWidth: 4, strokeLinecap: 'round', strokeLinejoin: 'round' }
+ 
+   return (
+-    <svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-label={pending ? 'not checked in' : mood}>
+-      {pending ? (
++    <svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-label={away ? 'away' : pending ? 'not checked in' : mood}>
++      {away ? (
++        <>
++          <circle cx="50" cy="50" r="46" fill="#e7f0f1" />
++          <path d="M41 36 V64 M59 36 V64" {...s} />
++        </>
++      ) : pending ? (
+         <circle cx="50" cy="50" r="45" fill="#eef2f3" stroke="#b3bfc2" strokeWidth="4" strokeDasharray="7 8" strokeLinecap="round" />
+       ) : (
+         <circle cx="50" cy="50" r="46" fill={MOOD_COLORS[mood]} />
+diff --git a/src/components/Roster.jsx b/src/components/Roster.jsx
+index 86b43ee..eba924e 100644
+--- a/src/components/Roster.jsx
++++ b/src/components/Roster.jsx
+@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
+ import { getRoster, getEmployeeWeek } from '../api.js'
+ import { MOODS, MOOD_COLORS } from '../moods.js'
+ import { Face } from './Faces.jsx'
++import { AWAY_LABELS, prettyDay } from '../away.js'
+ 
+ const GRAY = '#c3ccce'
+ const colorFor = (mood) => (mood ? MOOD_COLORS[mood] : GRAY)
+@@ -18,16 +19,20 @@ function EmployeeWeek({ person, onBack }) {
+     <section className="card">
+       <button className="back" onClick={onBack}>← Back to team</button>
+       <h1>{person.name}&rsquo;s progress</h1>
+-      <p className="note">This week. Gray means no check-in.</p>
++      <p className="note">This week. Gray means no check-in; a pause mark means they were away.</p>
+       {error && <p className="note warn">Couldn't load this week.</p>}
+       {!week && !error && <p className="note">Loading…</p>}
+       {week && (
+         <div className="week">
+           {week.map((d) => (
+-            <div key={d.label} className={`week-day ${d.mood ? '' : 'pending'}`} style={{ '--mood': colorFor(d.mood) }}>
+-              <Face mood={d.mood ?? 'none'} size={72} />
++            <div
++              key={d.label}
++              className={`week-day ${d.away ? 'away' : d.mood ? '' : 'pending'}`}
++              style={{ '--mood': colorFor(d.mood) }}
++            >
++              <Face mood={d.away ? 'away' : (d.mood ?? 'none')} size={72} />
+               <span>{d.label}</span>
+-              <small>{d.mood ?? 'no check-in'}</small>
++              <small>{d.away ? (AWAY_LABELS[d.awayKind] ?? 'away').toLowerCase() : (d.mood ?? 'no check-in')}</small>
+             </div>
+           ))}
+         </div>
+@@ -49,17 +54,19 @@ export default function Roster() {
+   if (error) return <section className="card"><p className="note warn">Couldn't load your team.</p></section>
+   if (!people) return <section className="card"><p className="note">Loading…</p></section>
+ 
++  const away = people.filter((p) => p.away)
++  const expected = people.length - away.length // people who are away aren't expected to check in
+   const done = people.filter((p) => p.mood).length
+-  const pct = Math.round((done / (people.length || 1)) * 100)
++  const pct = Math.round((done / (expected || 1)) * 100)
+ 
+   return (
+     <section className="card">
+       <h1>Your team today</h1>
+-      <p className="note">Click anyone to see their week. Gray means not checked in yet.</p>
++      <p className="note">Click anyone to see their week. Gray means not checked in yet; a pause mark means they're away.</p>
+ 
+       <div className="stats">
+         <div className="stat-main">
+-          <strong>{done}<small> / {people.length}</small></strong>
++          <strong>{done}<small> / {expected}</small></strong>
+           <span>checked in today</span>
+           <div className="meter"><i style={{ width: `${pct}%` }} /></div>
+         </div>
+@@ -70,19 +77,27 @@ export default function Roster() {
+             <span>{mood}</span>
+           </div>
+         ))}
++        <div className="stat away-stat">
++          <Face mood="away" size={36} />
++          <strong>{away.length}</strong>
++          <span>away</span>
++        </div>
+       </div>
+ 
+       <div className="roster">
+         {people.map((p) => (
+           <button
+             key={p.id}
+-            className={`person ${p.mood ? '' : 'pending'}`}
++            className={`person ${p.away ? 'away' : p.mood ? '' : 'pending'}`}
+             style={{ '--mood': colorFor(p.mood) }}
+             onClick={() => setPicked(p)}
+           >
+-            <Face mood={p.mood ?? 'none'} size={84} />
++            <Face mood={p.away ? 'away' : (p.mood ?? 'none')} size={84} />
+             <strong>{p.name}</strong>
+-            <span className="pill">{p.mood ?? 'not yet'}</span>
++            <span className="pill">{p.away ? AWAY_LABELS[p.away.kind] : (p.mood ?? 'not yet')}</span>
++            {p.away && (
++              <small className="away-until">{p.away.endsOn ? `back ${prettyDay(p.away.endsOn)}` : 'return date not set'}</small>
++            )}
+           </button>
+         ))}
+       </div>

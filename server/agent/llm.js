@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import "dotenv/config";
+import process from "node:process";
 
 // load .env into process.env. 
 const client = new OpenAI({

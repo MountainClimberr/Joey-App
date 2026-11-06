@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 const initials = (name = '') =>
   name
-    .replace(/\(.*?\)/g, '') // "Dana (HR)" -> "Dana"
+    .replace(/\(.*?\)/g, '') // "Claire (HR)" -> "Claire"
     .trim()
     .split(/\s+/)
     .slice(0, 2)

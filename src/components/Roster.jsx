@@ -23,7 +23,6 @@ function EmployeeWeek({ person, onBack }) {
         <Avatar name={person.name} photo={person.photo} size={132} className="profile-photo" />
         <div>
           <h1>{person.name}</h1>
-          {person.title && <p className="profile-title">{person.title}</p>}
           <p className="note">This week. Gray means no check-in; a pause mark means they were away.</p>
         </div>
       </header>
@@ -104,7 +103,6 @@ export default function Roster() {
               <span className="mood-badge"><Face mood={p.away ? 'away' : (p.mood ?? 'none')} size={40} /></span>
             </div>
             <strong>{p.name}</strong>
-            {p.title && <span className="person-title">{p.title}</span>}
             <span className="pill">{p.away ? AWAY_LABELS[p.away.kind] : (p.mood ?? 'not yet')}</span>
             {p.away && (
               <small className="away-until">{p.away.endsOn ? `back ${prettyDay(p.away.endsOn)}` : 'return date not set'}</small>

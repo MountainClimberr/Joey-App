@@ -56,8 +56,8 @@ export function getMe() {
     const role = localStorage.getItem('joey-mock-role') || 'employee'
     return Promise.resolve({
       id: role === 'hr' ? 'mock-hr' : 'mock-employee',
-      name: role === 'hr' ? 'Dana (HR)' : 'Sandra',
-      photo: role === 'hr' ? '/staff/dana.jpg' : '/staff/sandra.jpg',
+      name: role === 'hr' ? BOSS.name : STAFF[0].name,
+      photo: role === 'hr' ? BOSS.photo : STAFF[0].photo,
       role,
     })
   }
@@ -100,17 +100,43 @@ export function endAway(employeeId) {
 }
 
 // ---- HR roster ----
-// Staff photos live in public/staff/ and are referenced by path. Until a photo file
-// exists, <Avatar> falls back to the person's initials.
-const MOCK_ROSTER = [
-  { id: 'mock-e0', name: 'Carol', title: 'Team Lead', photo: '/staff/carol.jpg', mood: 'uncomfortable' },
-  { id: 'mock-e1', name: 'Sandra', title: 'Coordinator', photo: '/staff/sandra.jpg', mood: 'comfortable' },
-  { id: 'mock-e2', name: 'Robert', title: 'Specialist', photo: '/staff/robert.jpg', mood: null, away: { kind: 'vacation', endsOn: localDay(4) } },
-  { id: 'mock-e3', name: 'Priya', title: 'Analyst', photo: '/staff/priya.jpg', mood: 'neutral' },
-  { id: 'mock-e4', name: 'Marcus', title: 'Associate', photo: '/staff/marcus.jpg', mood: 'comfortable' },
-  { id: 'mock-e5', name: 'Lena', title: 'Associate', photo: '/staff/lena.jpg', mood: null, away: { kind: 'sick', endsOn: null } },
-  { id: 'mock-e6', name: 'Tom', title: 'Assistant', photo: '/staff/tom.jpg', mood: null },
+// The team. Photos live in public/team/ (600x600 web-sized crops); anyone without
+// a photo shows their initials instead.
+const STAFF = [
+  { name: 'Alex', photo: '/team/alex.jpg' },
+  { name: 'Angie', photo: '/team/angie.jpg' },
+  { name: 'Colton', photo: '/team/colton.jpg' },
+  { name: 'Dawnetta', photo: '/team/dawnetta.jpg' },
+  { name: 'Derek', photo: '/team/derek.jpg' },
+  { name: 'Dona', photo: '/team/dona.jpg' },
+  { name: 'Eldon', photo: '/team/eldon.jpg' },
+  { name: 'Gordon', photo: '/team/gordon.jpg' },
+  { name: 'Halley', photo: '/team/halley.jpg' },
+  { name: 'Henry', photo: '/team/henry.jpg' },
+  { name: 'Hurlow', photo: '/team/hurlow.jpg' },
+  { name: 'Jen', photo: '/team/jen.jpg' },
+  { name: 'John', photo: '/team/john.jpg' },
+  { name: 'Laura', photo: '/team/laura.jpg' },
+  { name: 'Mike', photo: '/team/mike.jpg' },
+  { name: 'Stacey', photo: '/team/stacey.jpg' },
 ]
+
+// Claire is the boss: she uses the HR view (Team + Team Insights), so she isn't on the roster.
+const BOSS = { name: 'Claire', photo: '/team/claire.jpg' }
+
+// Demo-only statuses so the roster shows a realistic mix of moods, away and not-yet.
+const DEMO_MOODS = ['comfortable', 'neutral', 'comfortable', 'uncomfortable', null, 'comfortable']
+const DEMO_AWAY = {
+  6: { kind: 'vacation', endsOn: localDay(4) },
+  13: { kind: 'sick', endsOn: null },
+}
+
+const MOCK_ROSTER = STAFF.map((person, i) => ({
+  id: `mock-e${i}`,
+  ...person,
+  mood: DEMO_AWAY[i] ? null : DEMO_MOODS[i % DEMO_MOODS.length],
+  ...(DEMO_AWAY[i] && { away: DEMO_AWAY[i] }),
+}))
 
 export function getRoster() {
   if (USE_MOCK) return Promise.resolve(MOCK_ROSTER)

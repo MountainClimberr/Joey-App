@@ -57,6 +57,7 @@ export function getMe() {
     return Promise.resolve({
       id: role === 'hr' ? 'mock-hr' : 'mock-employee',
       name: role === 'hr' ? 'Dana (HR)' : 'Sandra',
+      photo: role === 'hr' ? '/staff/dana.jpg' : '/staff/sandra.jpg',
       role,
     })
   }
@@ -99,14 +100,16 @@ export function endAway(employeeId) {
 }
 
 // ---- HR roster ----
+// Staff photos live in public/staff/ and are referenced by path. Until a photo file
+// exists, <Avatar> falls back to the person's initials.
 const MOCK_ROSTER = [
-  { id: 'mock-e0', name: 'Carol', mood: 'uncomfortable' },
-  { id: 'mock-e1', name: 'Sandra', mood: 'comfortable' },
-  { id: 'mock-e2', name: 'Robert', mood: null, away: { kind: 'vacation', endsOn: localDay(4) } },
-  { id: 'mock-e3', name: 'Priya', mood: 'neutral' },
-  { id: 'mock-e4', name: 'Marcus', mood: 'comfortable' },
-  { id: 'mock-e5', name: 'Lena', mood: null, away: { kind: 'sick', endsOn: null } },
-  { id: 'mock-e6', name: 'Tom', mood: null },
+  { id: 'mock-e0', name: 'Carol', title: 'Team Lead', photo: '/staff/carol.jpg', mood: 'uncomfortable' },
+  { id: 'mock-e1', name: 'Sandra', title: 'Coordinator', photo: '/staff/sandra.jpg', mood: 'comfortable' },
+  { id: 'mock-e2', name: 'Robert', title: 'Specialist', photo: '/staff/robert.jpg', mood: null, away: { kind: 'vacation', endsOn: localDay(4) } },
+  { id: 'mock-e3', name: 'Priya', title: 'Analyst', photo: '/staff/priya.jpg', mood: 'neutral' },
+  { id: 'mock-e4', name: 'Marcus', title: 'Associate', photo: '/staff/marcus.jpg', mood: 'comfortable' },
+  { id: 'mock-e5', name: 'Lena', title: 'Associate', photo: '/staff/lena.jpg', mood: null, away: { kind: 'sick', endsOn: null } },
+  { id: 'mock-e6', name: 'Tom', title: 'Assistant', photo: '/staff/tom.jpg', mood: null },
 ]
 
 export function getRoster() {

@@ -6,6 +6,7 @@ import Insights from './components/Insights.jsx'
 import Roster from './components/Roster.jsx'
 import JoeyAi from './components/JoeyAi.jsx'
 import DevRoleSwitcher from './components/DevRoleSwitcher.jsx'
+import Avatar from './components/Avatar.jsx'
 import './App.css'
 
 const VIEWS = {
@@ -49,7 +50,7 @@ function Shell() {
           )}
 
           <div className="user-chip">
-            <span className="avatar">{user.name.charAt(0)}</span>
+            <Avatar name={user.name} photo={user.photo} size={32} />
             <span>{user.name}</span>
             <em className={`role ${user.role}`}>{user.role === 'hr' ? 'HR' : 'Employee'}</em>
           </div>

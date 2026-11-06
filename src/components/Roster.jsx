@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getRoster, getEmployeeWeek } from '../api.js'
 import { MOODS, MOOD_COLORS } from '../moods.js'
 import { Face } from './Faces.jsx'
+import Avatar from './Avatar.jsx'
 import { AWAY_LABELS, prettyDay } from '../away.js'
 
 const GRAY = '#c3ccce'
@@ -18,8 +19,14 @@ function EmployeeWeek({ person, onBack }) {
   return (
     <section className="card">
       <button className="back" onClick={onBack}>← Back to team</button>
-      <h1>{person.name}&rsquo;s progress</h1>
-      <p className="note">This week. Gray means no check-in; a pause mark means they were away.</p>
+      <header className="profile">
+        <Avatar name={person.name} photo={person.photo} size={132} className="profile-photo" />
+        <div>
+          <h1>{person.name}</h1>
+          {person.title && <p className="profile-title">{person.title}</p>}
+          <p className="note">This week. Gray means no check-in; a pause mark means they were away.</p>
+        </div>
+      </header>
       {error && <p className="note warn">Couldn't load this week.</p>}
       {!week && !error && <p className="note">Loading…</p>}
       {week && (
@@ -62,7 +69,7 @@ export default function Roster() {
   return (
     <section className="card">
       <h1>Your team today</h1>
-      <p className="note">Click anyone to see their week. Gray means not checked in yet; a pause mark means they're away.</p>
+      <p className="note">Meet the team. Click anyone to see their week. Gray means not checked in yet; a pause mark means they're away.</p>
 
       <div className="stats">
         <div className="stat-main">
@@ -92,8 +99,12 @@ export default function Roster() {
             style={{ '--mood': colorFor(p.mood) }}
             onClick={() => setPicked(p)}
           >
-            <Face mood={p.away ? 'away' : (p.mood ?? 'none')} size={84} />
+            <div className="person-photo">
+              <Avatar name={p.name} photo={p.photo} size="100%" />
+              <span className="mood-badge"><Face mood={p.away ? 'away' : (p.mood ?? 'none')} size={40} /></span>
+            </div>
             <strong>{p.name}</strong>
+            {p.title && <span className="person-title">{p.title}</span>}
             <span className="pill">{p.away ? AWAY_LABELS[p.away.kind] : (p.mood ?? 'not yet')}</span>
             {p.away && (
               <small className="away-until">{p.away.endsOn ? `back ${prettyDay(p.away.endsOn)}` : 'return date not set'}</small>

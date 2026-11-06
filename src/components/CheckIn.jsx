@@ -5,6 +5,7 @@ import { MOODS, MOOD_COLORS } from '../moods.js'
 import { Face } from './Faces.jsx'
 import FollowUp from './Followup.jsx'
 import { AwayForm, AwayNotice } from './Away.jsx'
+import Avatar from './Avatar.jsx'
 
 function greeting() {
   const h = new Date().getHours()
@@ -49,6 +50,7 @@ export default function CheckIn() {
 
   return (
     <section className="card checkin">
+      <Avatar name={user.name} photo={user.photo} size={96} className="checkin-photo" />
       <p className="kicker">{hello}, {user.name.split(' ')[0]}</p>
       <h1>How are you feeling today?</h1>
       <p className="sub">One tap is all it takes.</p>

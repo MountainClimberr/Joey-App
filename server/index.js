@@ -19,9 +19,10 @@ app.use(express.json())
 const validAwayKinds = new Set(['vacation', 'sick'])
 
 function isValidDay(value) {
-  return typeof value === 'string'
-    && /^\d{4}-\d{2}-\d{2}$/.test(value)
-    && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+
+  const date = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
 }
 
 // An away period counts today if it has started, hasn't passed its end date, and

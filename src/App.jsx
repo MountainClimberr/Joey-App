@@ -7,6 +7,7 @@ import Roster from './components/Roster.jsx'
 import JoeyAi from './components/JoeyAi.jsx'
 import DevRoleSwitcher from './components/DevRoleSwitcher.jsx'
 import Avatar from './components/Avatar.jsx'
+import NeedsAttention from './components/NeedsAttention.jsx'
 import './App.css'
 
 const VIEWS = {
@@ -18,6 +19,7 @@ const VIEWS = {
 function Shell() {
   const { status, user } = useAuth()
   const [view, setView] = useState(null)
+  const [focus, setFocus] = useState(null) // { person, n }: open this person's week on the Team page
   const [today] = useState(() =>
     new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' }),
   )
@@ -40,7 +42,7 @@ function Shell() {
           {allowed.length > 1 ? (
             <nav className="tabs">
               {allowed.map(([key, v]) => (
-                <button key={key} className={current === key ? 'active' : ''} onClick={() => setView(key)}>
+                <button key={key} className={current === key ? 'active' : ''} onClick={() => { setView(key); setFocus(null) }}>
                   {v.label}
                 </button>
               ))}
@@ -49,15 +51,27 @@ function Shell() {
             <span className="date">{today}</span>
           )}
 
-          <div className="user-chip">
-            <Avatar name={user.name} photo={user.photo} size={32} />
-            <span>{user.name}</span>
-            <em className={`role ${user.role}`}>{user.role === 'hr' ? 'HR' : 'Employee'}</em>
+          <div className="topbar-right">
+            {user.role === 'hr' && (
+              <NeedsAttention
+                onViewPerson={(person) => {
+                  setView('team')
+                  setFocus((f) => ({ person, n: (f?.n ?? 0) + 1 }))
+                }}
+              />
+            )}
+            <div className="user-chip">
+              <Avatar name={user.name} photo={user.photo} size={32} />
+              <span>{user.name}</span>
+              <em className={`role ${user.role}`}>{user.role === 'hr' ? 'HR' : 'Employee'}</em>
+            </div>
           </div>
         </header>
 
         <div className="content">
-          <Component />
+          {current === 'team'
+            ? <Component key={focus?.n ?? 0} focusPerson={focus?.person} />
+            : <Component />}
         </div>
       </main>
     </div>

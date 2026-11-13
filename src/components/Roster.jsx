@@ -47,10 +47,11 @@ function EmployeeWeek({ person, onBack }) {
   )
 }
 
-export default function Roster() {
+// focusPerson: open straight onto this person's week (from "Needs attention").
+export default function Roster({ focusPerson = null }) {
   const [people, setPeople] = useState(null)
   const [error, setError] = useState(false)
-  const [picked, setPicked] = useState(null)
+  const [picked, setPicked] = useState(focusPerson)
 
   useEffect(() => {
     getRoster().then(setPeople).catch(() => setError(true))

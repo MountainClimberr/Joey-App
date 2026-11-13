@@ -148,16 +148,48 @@ export function getEmployeeWeek(employeeId) {
     const today = (new Date().getDay() + 6) % 7 // Mon = 0
     const person = MOCK_ROSTER.find((p) => p.id === employeeId)
     const earlier = ['neutral', 'uncomfortable', 'uncomfortable', 'neutral', 'comfortable']
+    const onStreak = MOCK_ALERTS.some((a) => a.employeeId === employeeId && a.type === 'uncomfortable_streak')
     const week = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((label, i) => {
       const away = Boolean(person?.away) && i >= today - 1
+      const past = onStreak ? (i >= today - 2 ? 'uncomfortable' : 'neutral') : earlier[i] // match their alert
       return {
         label,
         away,
         awayKind: away ? person.away.kind : null,
-        mood: away ? null : i < today ? earlier[i] : i === today ? (person?.mood ?? null) : null,
+        mood: away ? null : i < today ? past : i === today ? (person?.mood ?? null) : null,
       }
     })
     return Promise.resolve(week)
   }
   return http(`/roster/${encodeURIComponent(employeeId)}/week`)
+}
+// ---- needs attention (HR) ----
+// Alerts are created by the server: 'uncomfortable_streak' after 3 uncomfortable
+// check-ins in a row, 'message_escalation' when Joey's chat spots a message a person
+// should follow up on. HR sees the open ones and marks them as handled.
+//
+// Server routes this expects (not built yet):
+//   GET  /api/alerts                 -> open alerts, newest first:
+//        [{ id, employeeId, name, photo, type, severity, createdAt, details }]
+//   POST /api/alerts/:id/acknowledge -> marks one as handled (status = 'acknowledged')
+const personFor = (index) => ({ employeeId: MOCK_ROSTER[index].id, name: MOCK_ROSTER[index].name, photo: MOCK_ROSTER[index].photo })
+const hoursAgo = (h) => new Date(Date.now() - h * 3_600_000).toISOString()
+
+const MOCK_ALERTS = [
+  { id: 'mock-a1', ...personFor(9), type: 'uncomfortable_streak', severity: 'high', createdAt: hoursAgo(2), details: { countAtDetection: 3 } },
+  { id: 'mock-a2', ...personFor(3), type: 'uncomfortable_streak', severity: 'high', createdAt: hoursAgo(5), details: { countAtDetection: 3 } },
+]
+const mockHandled = new Set() // demo only: resets when the page reloads
+
+export function getAlerts() {
+  if (USE_MOCK) return Promise.resolve(MOCK_ALERTS.filter((a) => !mockHandled.has(a.id)))
+  return http('/alerts')
+}
+
+export function acknowledgeAlert(alertId) {
+  if (USE_MOCK) {
+    mockHandled.add(alertId)
+    return Promise.resolve({ ok: true })
+  }
+  return http(`/alerts/${encodeURIComponent(alertId)}/acknowledge`, { method: 'POST' })
 }

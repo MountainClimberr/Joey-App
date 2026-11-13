@@ -27,16 +27,17 @@ function mockInsights(days) {
 
 // ---- exported calls ----
 export function getTodayCheckIn(employeeId) {
-  if (USE_MOCK) return Promise.resolve({ checkIn: mockRead()[isoDay()] ?? null })
+  if (USE_MOCK) return Promise.resolve({ checkIn: mockRead()[localDay()] ?? null })
   return http(`/checkins/today?employeeId=${encodeURIComponent(employeeId)}`)
 }
 
 export function submitCheckIn(employeeId, mood) {
   if (USE_MOCK) {
+    // Keyed by the local calendar day, so an evening check-in counts for today.
     const store = mockRead()
-    store[isoDay()] = { day: isoDay(), mood }
+    store[localDay()] = { ...store[localDay()], day: localDay(), mood }
     mockWrite(store)
-    return Promise.resolve(store[isoDay()])
+    return Promise.resolve(store[localDay()])
   }
   return http('/checkins', { method: 'POST', body: JSON.stringify({ employeeId, mood }) })
 }
@@ -47,7 +48,14 @@ export function getInsights(days = 28) {
 }
 
 export function submitFollowUp(employeeId, kind, data = {}) {
-  if (USE_MOCK) return Promise.resolve({ ok: true })
+  if (USE_MOCK) {
+    if (kind === 'note' && data.text?.trim()) {
+      const store = mockRead()
+      if (store[localDay()]) store[localDay()].note = data.text.trim() // shows up in My check-ins
+      mockWrite(store)
+    }
+    return Promise.resolve({ ok: true })
+  }
   return http('/followups', { method: 'POST', body: JSON.stringify({ employeeId, kind, ...data }) })
 }
 
@@ -192,4 +200,68 @@ export function acknowledgeAlert(alertId) {
     return Promise.resolve({ ok: true })
   }
   return http(`/alerts/${encodeURIComponent(alertId)}/acknowledge`, { method: 'POST' })
+}
+
+// ---- my check-ins (an employee's own history) ----
+// Each entry: { day: 'YYYY-MM-DD', mood, tags: ['Workload', ...], note }
+//
+// Server routes this expects (tags and notes aren't stored by the server yet):
+//   GET  /api/checkins?employeeId=...   -> { checkIns: [{ day, mood, tags, note }] }  (exists, without tags/note)
+//   POST /api/checkins/tags             -> { employeeId, tags } for today's check-in
+// Tags and notes are private to the employee: HR's views must never return them.
+export function getMyHistory(employeeId) {
+  if (USE_MOCK) {
+    seedDemoHistory()
+    return Promise.resolve(Object.values(mockRead()).sort((a, b) => a.day.localeCompare(b.day)))
+  }
+  return http(`/checkins?employeeId=${encodeURIComponent(employeeId)}`).then(({ checkIns }) =>
+    checkIns.map((c) => ({ day: String(c.day).slice(0, 10), mood: c.mood, tags: c.tags ?? [], note: c.note ?? null })),
+  )
+}
+
+export function setCheckInTags(employeeId, tags) {
+  if (USE_MOCK) {
+    const store = mockRead()
+    if (store[localDay()]) store[localDay()].tags = tags
+    mockWrite(store)
+    return Promise.resolve({ ok: true })
+  }
+  return http('/checkins/tags', { method: 'POST', body: JSON.stringify({ employeeId, tags }) })
+}
+
+// Demo only: about two months of past weekday check-ins, so My check-ins has something
+// to show. Never runs in the pilot, where testers start with an empty history.
+function seedDemoHistory() {
+  if (import.meta.env.VITE_PILOT === 'true' || localStorage.getItem('joey-mock-seeded')) return
+  const store = mockRead()
+  const notes = {
+    3: 'Finished the quarterly report early.',
+    11: 'Great team lunch.',
+    19: 'Too many back-to-back meetings.',
+    24: 'Rough night, kid was sick.',
+    33: 'Deadline week. Long days.',
+    41: 'Good feedback from a client.',
+  }
+  for (let back = 60, n = 0; back >= 1; back--) {
+    const date = new Date()
+    date.setDate(date.getDate() - back)
+    const weekday = date.getDay()
+    if (weekday === 0 || weekday === 6) continue
+    n += 1
+    if (n % 9 === 5) continue // a few missed days, like real life
+    const day = localDay(-back)
+    if (store[day]) continue
+    const tough = n >= 30 && n <= 34 // a deadline crunch a few weeks back
+    const mood = tough ? (n % 2 ? 'uncomfortable' : 'neutral') : ['comfortable', 'comfortable', 'neutral', 'comfortable', 'uncomfortable', 'comfortable', 'neutral'][n % 7]
+    const tags = tough
+      ? ['Workload', 'Deadlines']
+      : mood === 'uncomfortable'
+        ? [['Sleep'], ['Meetings', 'Workload'], ['Health']][n % 3]
+        : mood === 'comfortable'
+          ? [['Team'], [], ['Family'], ['Personal life'], []][n % 5]
+          : [['Meetings'], [], ['Workload']][n % 3]
+    store[day] = { day, mood, tags, ...(notes[n] && { note: notes[n] }) }
+  }
+  mockWrite(store)
+  localStorage.setItem('joey-mock-seeded', '1')
 }

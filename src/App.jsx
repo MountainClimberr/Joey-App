@@ -2,6 +2,7 @@ import { useState } from 'react'
 import AuthProvider from './auth/AuthProvider.jsx'
 import { useAuth } from './auth/context.js'
 import CheckIn from './components/CheckIn.jsx'
+import MyCheckins from './components/MyCheckins.jsx'
 import Insights from './components/Insights.jsx'
 import Roster from './components/Roster.jsx'
 import JoeyAi from './components/JoeyAi.jsx'
@@ -12,6 +13,7 @@ import './App.css'
 
 const VIEWS = {
   checkin: { label: 'Check-in', roles: ['employee'], Component: CheckIn },
+  history: { label: 'My check-ins', roles: ['employee'], Component: MyCheckins },
   team: { label: 'Team', roles: ['hr'], Component: Roster },
   insights: { label: 'Team Insights', roles: ['hr'], Component: Insights },
 }

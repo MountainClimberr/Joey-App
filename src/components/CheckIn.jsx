@@ -1,11 +1,39 @@
 import { useEffect, useState } from 'react'
-import { getTodayCheckIn, submitCheckIn, getAway } from '../api.js'
+import { getTodayCheckIn, submitCheckIn, getAway, setCheckInTags } from '../api.js'
+import { CHECKIN_TAGS } from '../checkinTags.js'
 import { useAuth } from '../auth/context.js'
 import { MOODS, MOOD_COLORS } from '../moods.js'
 import { Face } from './Faces.jsx'
 import FollowUp from './Followup.jsx'
 import { AwayForm, AwayNotice } from './Away.jsx'
 import Avatar from './Avatar.jsx'
+
+// Optional, one tap each: what's behind today's mood. Shows up later in My check-ins.
+function TagPicker({ employeeId, initial }) {
+  const [tags, setTags] = useState(initial)
+  const [failed, setFailed] = useState(false)
+
+  function toggle(tag) {
+    const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag]
+    setTags(next)
+    setFailed(false)
+    setCheckInTags(employeeId, next).catch(() => setFailed(true))
+  }
+
+  return (
+    <div className="tag-picker">
+      <p className="tag-picker-label">Anything affecting you today? <span>Optional, just for you</span></p>
+      <div className="tag-chips">
+        {CHECKIN_TAGS.map((tag) => (
+          <button key={tag} className={tags.includes(tag) ? 'is-on' : ''} aria-pressed={tags.includes(tag)} onClick={() => toggle(tag)}>
+            {tag}
+          </button>
+        ))}
+      </div>
+      {failed && <p className="note warn">Couldn't save that tag. Try again in a moment.</p>}
+    </div>
+  )
+}
 
 function greeting() {
   const h = new Date().getHours()
@@ -21,11 +49,13 @@ export default function CheckIn() {
   const [status, setStatus] = useState('loading') // loading | ready | saving | error
   const [away, setAway] = useState(null) // active vacation / sick period, if any
   const [showAwayForm, setShowAwayForm] = useState(false)
+  const [todayTags, setTodayTags] = useState([])
 
   useEffect(() => {
     Promise.all([getTodayCheckIn(employeeId), getAway(employeeId)])
       .then(([{ checkIn }, { away: activeAway }]) => {
         setSelected(checkIn?.mood ?? null) // already checked in today: don't re-prompt
+        setTodayTags(checkIn?.tags ?? [])
         setAway(activeAway)
         setStatus('ready')
       })
@@ -70,6 +100,8 @@ export default function CheckIn() {
           </button>
         ))}
       </div>
+
+      {selected && <TagPicker employeeId={employeeId} initial={todayTags} />}
 
       {status === 'error' && <p className="note warn">Couldn't reach the server. Try again in a moment.</p>}
       {selected && !showFollowUp && status !== 'error' && (

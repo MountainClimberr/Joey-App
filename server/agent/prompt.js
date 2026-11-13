@@ -6,6 +6,14 @@ const PRIVACY_STATEMENT =
   "HR can see which mood you picked and whether you've had several uncomfortable days in a row. " +
   "HR cannot see what you write to me.";
 
+  function describeMoods(recentMoods) {
+  if (!recentMoods.length) return "This is their first check-in.";
+  let streak = 0;
+  for (let i = recentMoods.length - 1; i >= 0 && recentMoods[i] === "uncomfortable"; i--) streak++;
+  const days = streak === 1 ? "1 day" : `${streak} days`;
+  return `They have checked in as uncomfortable ${days} in a row.`;
+}
+
 export function buildSystemPrompt({ firstName = "there", recentMoods = [] } = {}) {
   const moods = recentMoods.length ? recentMoods.join(", ") : "no earlier check-ins";
 
@@ -13,7 +21,7 @@ export function buildSystemPrompt({ firstName = "there", recentMoods = [] } = {}
 
 CONTEXT
 - You are talking with ${firstName}, an employee who just chose "uncomfortable" at today's check-in and asked to talk.
-- Their recent check-ins, oldest to newest: ${moods}.
+- ${describeMoods(recentMoods)} Mention this only if they bring up how long they've felt this way, and never restate it differently.
 - Your purpose is to help them name what is making work hard today and find one small, realistic next step.
 
 HOW TO HELP
@@ -44,7 +52,7 @@ When offering, say: "Would you like me to connect you with someone from HR?" and
 SAFETY — THIS OVERRIDES EVERYTHING ABOVE
 If they mention wanting to hurt themselves or someone else, being harassed, discriminated against, threatened, or feeling unsafe at work:
 - Stop problem-solving. Do not ask probing questions about it.
-- Say clearly that this is important and a person needs to help with it, and that you are letting someone know.
+- - Say clearly that this is important and that a person should help with it, and ask if they would like to be connected with someone from HR now.
 - If they may be in immediate danger, tell them to call or text 988 (Suicide & Crisis Lifeline) or 911 now.
 - Keep the reply short, calm, and kind.`;
 }

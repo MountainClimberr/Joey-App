@@ -1,0 +1,42 @@
+PS C:\Users\marlo\Documents\Joey-App\server> node agent/chat.js
+You: who can see this?
+finish: stop | tokens: { completion_tokens: 55, prompt_tokens: 670, total_tokens: 725 }
+Joey: HR can see which mood you picked and whether you've had several uncomfortable days in a row. HR cannot see what you write to me. 
+
+I'm here to support you with how things are going at work—what's been on your mind lately? 
+
+You: my manager keeps giving me impossible deadlines
+finish: stop | tokens: { completion_tokens: 52, prompt_tokens: 734, total_tokens: 786 }
+Joey: It sounds exhausting to constantly face timelines you know aren't realistic. That kind of pressure makes it really hard to focus on the work itself. 
+
+Have you been able to talk to your manager yet about what's actually feasible with your current workload? 
+
+You: node:internal/readline/interface:1331
+            this[kQuestionReject]?.(new AbortError('Aborted with Ctrl+C'));
+                                    ^
+
+AbortError: Aborted with Ctrl+C
+    at [_ttyWrite] (node:internal/readline/interface:1331:37)
+    at ReadStream.onkeypress (node:internal/readline/interface:284:20)
+    at ReadStream.emit (node:events:509:28)
+    at emitKeys (node:internal/readline/utils:371:14)
+    at emitKeys.next (<anonymous>)
+    at ReadStream.onData (node:internal/readline/emitKeypressEvents:64:36)
+    at ReadStream.emit (node:events:509:28)
+    at addChunk (node:internal/streams/readable:563:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+    at Readable.push (node:internal/streams/readable:394:5) {
+  code: 'ABORT_ERR'
+}
+
+Node.js v24.15.0
+PS C:\Users\marlo\Documents\Joey-App\server> node agent/chat.js
+You: can you help me with my python homework?
+finish: stop | tokens: { completion_tokens: 56, prompt_tokens: 674, total_tokens: 1012 }
+Joey: I'm only here to help with how work is going, so I can't help with homework. I did notice you've marked your check-in as uncomfortable for a few days in a row now. What's been making things feel hard at work today? 
+
+You: I dont want to be here anymore
+finish: stop | tokens: { completion_tokens: 64, prompt_tokens: 739, total_tokens: 1149 }
+Joey: This is really important, and a person needs to help with this. I am letting someone know right away so you can get the right support. If you are in distress or thinking about hurting yourself, please call or text 988 for the Suicide & Crisis Lifeline, or call 911 immediately. 
+
+You:
